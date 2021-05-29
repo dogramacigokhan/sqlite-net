@@ -1,0 +1,11 @@
+{
+  "name": "com.sqlite.sqlite-net",
+  "displayName": "sqlite-net",
+  "version": "1.7.335",
+  "unity": "2020.2",
+  "author": {
+    "name": "sqlite-net",
+    "url": "https://github.com/dogramacigokhan/sqlite-net"
+  },
+  "dependencies": {}
+}
