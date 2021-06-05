@@ -219,6 +219,11 @@ namespace SQLite
 		public bool StoreTimeSpanAsTicks { get; private set; }
 
 		/// <summary>
+		/// Whether to store unknown types as JSON.
+		/// </summary>
+		public bool StoreUnknownTypesAsJson { get; private set; }
+
+		/// <summary>
 		/// The format to use when storing DateTime properties as strings. Ignored if StoreDateTimeAsTicks is true.
 		/// </summary>
 		/// <value>The date time string format.</value>
@@ -251,8 +256,11 @@ namespace SQLite
 		/// If you use DateTimeOffset properties, it will be always stored as ticks regardingless
 		/// the storeDateTimeAsTicks parameter.
 		/// </param>
-		public SQLiteConnection (string databasePath, bool storeDateTimeAsTicks = true)
-			: this (new SQLiteConnectionString (databasePath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create, storeDateTimeAsTicks))
+		/// <param name="storeUnknownTypesAsJson">
+		/// Specifies whether to store unknown types as JSON.
+		/// </param>
+		public SQLiteConnection (string databasePath, bool storeDateTimeAsTicks = true, bool storeUnknownTypesAsJson = true)
+			: this (new SQLiteConnectionString (databasePath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create, storeDateTimeAsTicks, storeUnknownTypesAsJson: storeUnknownTypesAsJson))
 		{
 		}
 
@@ -273,8 +281,11 @@ namespace SQLite
 		/// If you use DateTimeOffset properties, it will be always stored as ticks regardingless
 		/// the storeDateTimeAsTicks parameter.
 		/// </param>
-		public SQLiteConnection (string databasePath, SQLiteOpenFlags openFlags, bool storeDateTimeAsTicks = true)
-			: this (new SQLiteConnectionString (databasePath, openFlags, storeDateTimeAsTicks))
+		/// <param name="storeUnknownTypesAsJson">
+		/// Specifies whether to store unknown types as JSON.
+		/// </param>
+		public SQLiteConnection (string databasePath, SQLiteOpenFlags openFlags, bool storeDateTimeAsTicks = true, bool storeUnknownTypesAsJson = true)
+			: this (new SQLiteConnectionString (databasePath, openFlags, storeDateTimeAsTicks, storeUnknownTypesAsJson: storeUnknownTypesAsJson))
 		{
 		}
 
@@ -319,6 +330,7 @@ namespace SQLite
 
 			StoreDateTimeAsTicks = connectionString.StoreDateTimeAsTicks;
 			StoreTimeSpanAsTicks = connectionString.StoreTimeSpanAsTicks;
+			StoreUnknownTypesAsJson = connectionString.StoreDateTimeAsTicks;
 			DateTimeStringFormat = connectionString.DateTimeStringFormat;
 			DateTimeStyle = connectionString.DateTimeStyle;
 
@@ -573,7 +585,7 @@ namespace SQLite
 
 				// Build query.
 				var query = "create " + @virtual + "table if not exists \"" + map.TableName + "\" " + @using + "(\n";
-				var decls = map.Columns.Select (p => Orm.SqlDecl (p, StoreDateTimeAsTicks, StoreTimeSpanAsTicks));
+				var decls = map.Columns.Select (p => Orm.SqlDecl (p, StoreDateTimeAsTicks, StoreTimeSpanAsTicks, StoreUnknownTypesAsJson));
 				var decl = string.Join (",\n", decls.ToArray ());
 				query += decl;
 				query += ")";
@@ -844,7 +856,7 @@ namespace SQLite
 			}
 
 			foreach (var p in toBeAdded) {
-				var addCol = "alter table \"" + map.TableName + "\" add column " + Orm.SqlDecl (p, StoreDateTimeAsTicks, StoreTimeSpanAsTicks);
+				var addCol = "alter table \"" + map.TableName + "\" add column " + Orm.SqlDecl (p, StoreDateTimeAsTicks, StoreTimeSpanAsTicks, StoreUnknownTypesAsJson);
 				Execute (addCol);
 			}
 		}
@@ -2175,6 +2187,7 @@ namespace SQLite
 		public string DatabasePath { get; }
 		public bool StoreDateTimeAsTicks { get; }
 		public bool StoreTimeSpanAsTicks { get; }
+		public bool StoreUnknownTypesAsJson { get; }
 		public string DateTimeStringFormat { get; }
 		public System.Globalization.DateTimeStyles DateTimeStyle { get; }
 		public object Key { get; }
@@ -2287,7 +2300,10 @@ namespace SQLite
 		/// only here for backwards compatibility. There is a *significant* speed advantage, with no
 		/// down sides, when setting storeTimeSpanAsTicks = true.
 		/// </param>
-		public SQLiteConnectionString (string databasePath, SQLiteOpenFlags openFlags, bool storeDateTimeAsTicks, object key = null, Action<SQLiteConnection> preKeyAction = null, Action<SQLiteConnection> postKeyAction = null, string vfsName = null, string dateTimeStringFormat = DateTimeSqliteDefaultFormat, bool storeTimeSpanAsTicks = true)
+		/// <param name="storeUnknownTypesAsJson">
+		/// Specifies whether to store unknown types as JSON.
+		/// </param>
+		public SQLiteConnectionString (string databasePath, SQLiteOpenFlags openFlags, bool storeDateTimeAsTicks, object key = null, Action<SQLiteConnection> preKeyAction = null, Action<SQLiteConnection> postKeyAction = null, string vfsName = null, string dateTimeStringFormat = DateTimeSqliteDefaultFormat, bool storeTimeSpanAsTicks = true, bool storeUnknownTypesAsJson = true)
 		{
 			if (key != null && !((key is byte[]) || (key is string)))
 				throw new ArgumentException ("Encryption keys must be strings or byte arrays", nameof (key));
@@ -2295,6 +2311,7 @@ namespace SQLite
 			UniqueKey = string.Format ("{0}_{1:X8}", databasePath, (uint)openFlags);
 			StoreDateTimeAsTicks = storeDateTimeAsTicks;
 			StoreTimeSpanAsTicks = storeTimeSpanAsTicks;
+			StoreUnknownTypesAsJson = storeUnknownTypesAsJson;
 			DateTimeStringFormat = dateTimeStringFormat;
 			DateTimeStyle = "o".Equals (DateTimeStringFormat, StringComparison.OrdinalIgnoreCase) || "r".Equals (DateTimeStringFormat, StringComparison.OrdinalIgnoreCase) ? System.Globalization.DateTimeStyles.RoundtripKind : System.Globalization.DateTimeStyles.None;
 			Key = key;
@@ -2701,9 +2718,9 @@ namespace SQLite
 			return obj.GetType ();
 		}
 
-		public static string SqlDecl (TableMapping.Column p, bool storeDateTimeAsTicks, bool storeTimeSpanAsTicks)
+		public static string SqlDecl (TableMapping.Column p, bool storeDateTimeAsTicks, bool storeTimeSpanAsTicks, bool storeUnknownTypesAsJson)
 		{
-			string decl = "\"" + p.Name + "\" " + SqlType (p, storeDateTimeAsTicks, storeTimeSpanAsTicks) + " ";
+			string decl = "\"" + p.Name + "\" " + SqlType (p, storeDateTimeAsTicks, storeTimeSpanAsTicks, storeUnknownTypesAsJson) + " ";
 
 			if (p.IsPK) {
 				decl += "primary key ";
@@ -2721,7 +2738,7 @@ namespace SQLite
 			return decl;
 		}
 
-		public static string SqlType (TableMapping.Column p, bool storeDateTimeAsTicks, bool storeTimeSpanAsTicks)
+		public static string SqlType (TableMapping.Column p, bool storeDateTimeAsTicks, bool storeTimeSpanAsTicks, bool storeUnknownTypesAsJson)
 		{
 			var clrType = p.ColumnType;
 			if (clrType == typeof (Boolean) || clrType == typeof (Byte) || clrType == typeof (UInt16) || clrType == typeof (SByte) || clrType == typeof (Int16) || clrType == typeof (Int32) || clrType == typeof (UInt32) || clrType == typeof (Int64)) {
@@ -2761,6 +2778,9 @@ namespace SQLite
 			}
 #if USE_JSON_NET
 			else if (clrType.GetInterfaces().Contains(typeof(IEnumerable))) {
+				return "varchar";
+			}
+			else if (storeUnknownTypesAsJson) {
 				return "varchar";
 			}
 #endif
@@ -3084,13 +3104,13 @@ namespace SQLite
 					b.Index = nextIdx++;
 				}
 
-				BindParameter (stmt, b.Index, b.Value, _conn.StoreDateTimeAsTicks, _conn.DateTimeStringFormat, _conn.StoreTimeSpanAsTicks);
+				BindParameter (stmt, b.Index, b.Value, _conn.StoreDateTimeAsTicks, _conn.DateTimeStringFormat, _conn.StoreTimeSpanAsTicks, _conn.StoreUnknownTypesAsJson);
 			}
 		}
 
 		static IntPtr NegativePointer = new IntPtr (-1);
 
-		internal static void BindParameter (Sqlite3Statement stmt, int index, object value, bool storeDateTimeAsTicks, string dateTimeStringFormat, bool storeTimeSpanAsTicks)
+		internal static void BindParameter (Sqlite3Statement stmt, int index, object value, bool storeDateTimeAsTicks, string dateTimeStringFormat, bool storeTimeSpanAsTicks, bool storeUnknownTypesAsJson)
 		{
 			if (value == null) {
 				SQLite3.BindNull (stmt, index);
@@ -3164,6 +3184,11 @@ namespace SQLite
 						else
 							SQLite3.BindInt (stmt, index, enumIntValue);
 					}
+#if USE_JSON_NET
+					else if (storeUnknownTypesAsJson) {
+						SQLite3.BindText(stmt, index, JsonConvert.SerializeObject(value), -1, NegativePointer);
+					}
+#endif
 					else {
 						throw new NotSupportedException ("Cannot store type: " + Orm.GetType (value));
 					}
@@ -3178,6 +3203,8 @@ namespace SQLite
 			public object Value { get; set; }
 
 			public int Index { get; set; }
+
+			public bool StoreAsJson { get; set; }
 		}
 
 		object ReadCol (Sqlite3Statement stmt, int index, SQLite3.ColType type, Type clrType)
@@ -3285,7 +3312,7 @@ namespace SQLite
 					return new UriBuilder (text);
 				}
 #if USE_JSON_NET
-				else if (clrType.GetInterfaces().Contains(typeof(IEnumerable))) {
+				else if (clrType.GetInterfaces().Contains(typeof(IEnumerable)) || _conn.StoreUnknownTypesAsJson) {
 					var value = SQLite3.ColumnString(stmt, index);
 					return JsonConvert.DeserializeObject(value, clrType);
 				}
@@ -3558,7 +3585,7 @@ namespace SQLite
 			//bind the values.
 			if (source != null) {
 				for (int i = 0; i < source.Length; i++) {
-					SQLiteCommand.BindParameter (Statement, i + 1, source[i], Connection.StoreDateTimeAsTicks, Connection.DateTimeStringFormat, Connection.StoreTimeSpanAsTicks);
+					SQLiteCommand.BindParameter (Statement, i + 1, source[i], Connection.StoreDateTimeAsTicks, Connection.DateTimeStringFormat, Connection.StoreTimeSpanAsTicks, Connection.StoreUnknownTypesAsJson);
 				}
 			}
 			r = SQLite3.Step (Statement);
