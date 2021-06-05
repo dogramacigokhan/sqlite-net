@@ -36,6 +36,10 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 
+#if USE_JSON_NET
+using Newtonsoft.Json;
+#endif
+
 #if USE_CSHARP_SQLITE
 using Sqlite3 = Community.CsharpSqlite.Sqlite3;
 using Sqlite3DatabaseHandle = Community.CsharpSqlite.Sqlite3.sqlite3;
@@ -2755,6 +2759,11 @@ namespace SQLite
 			else if (clrType == typeof (Guid)) {
 				return "varchar(36)";
 			}
+#if USE_JSON_NET
+			else if (clrType.GetInterfaces().Contains(typeof(IEnumerable))) {
+				return "varchar";
+			}
+#endif
 			else {
 				throw new NotSupportedException ("Don't know about " + clrType);
 			}
@@ -3139,6 +3148,11 @@ namespace SQLite
 				else if (value is UriBuilder) {
 					SQLite3.BindText (stmt, index, ((UriBuilder)value).ToString (), -1, NegativePointer);
 				}
+#if USE_JSON_NET
+				else if (value is IEnumerable) {
+					SQLite3.BindText(stmt, index, JsonConvert.SerializeObject(value), -1, NegativePointer);
+				}
+#endif
 				else {
 					// Now we could possibly get an enum, retrieve cached info
 					var valueType = value.GetType ();
@@ -3270,6 +3284,12 @@ namespace SQLite
 					var text = SQLite3.ColumnString (stmt, index);
 					return new UriBuilder (text);
 				}
+#if USE_JSON_NET
+				else if (clrType.GetInterfaces().Contains(typeof(IEnumerable))) {
+					var value = SQLite3.ColumnString(stmt, index);
+					return JsonConvert.DeserializeObject(value, clrType);
+				}
+#endif
 				else {
 					throw new NotSupportedException ("Don't know how to read " + clrType);
 				}
