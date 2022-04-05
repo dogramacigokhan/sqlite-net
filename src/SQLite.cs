@@ -810,12 +810,14 @@ namespace SQLite
 		{
 			//			public int cid { get; set; }
 
+			[Preserve]
 			[Column ("name")]
 			public string Name { get; set; }
 
 			//			[Column ("type")]
 			//			public string ColumnType { get; set; }
 
+			[Preserve]
 			public int notnull { get; set; }
 
 			//			public string dflt_value { get; set; }
